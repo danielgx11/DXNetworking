@@ -5,14 +5,11 @@ final class NetworkLogger: Sendable {
 
     static let shared = NetworkLogger()
 
+    private let logger = Logger(subsystem: "com.dxnetworking.sdk", category: "Networking")
+
     // TODO: - Phase 5 #23 — Call from NetworkClient to log: request URL+method pre-send, status code+latency on response, error detail on failure
     func log(type: NetworkLoggerType = .default, message: String) {
-        let general = Logger(
-            subsystem: Bundle.main.bundleIdentifier ?? "com.networking.extension",
-            category: "Networking"
-        )
-
-        general.log(level: type.asLoggerType, "\(message)")
+        logger.log(level: type.asLoggerType, "\(message)")
     }
 }
 

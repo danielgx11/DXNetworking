@@ -1,7 +1,7 @@
 import Foundation
 
-enum NetworkError: LocalizedError, Equatable {
-    static func == (lhs: NetworkError, rhs: NetworkError) -> Bool {
+public enum NetworkError: LocalizedError, Equatable {
+    public static func == (lhs: NetworkError, rhs: NetworkError) -> Bool {
         switch (lhs, rhs) {
         case (.invalidBaseUrl, .invalidBaseUrl),
              (.invalidResponse, .invalidResponse),
@@ -31,7 +31,7 @@ enum NetworkError: LocalizedError, Equatable {
     case decodingError(Error)
     case unknown(Error)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .invalidBaseUrl:
             return "Invalid base URL"

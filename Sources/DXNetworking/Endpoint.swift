@@ -1,6 +1,6 @@
 import Foundation
 
-protocol Endpoint {
+public protocol Endpoint {
     // The path for the endpoint. This is the part of the URL after the host of the API
     var baseUrl: String { get }
     // The path for the endpoint. This is the part of the URL after the host of the API

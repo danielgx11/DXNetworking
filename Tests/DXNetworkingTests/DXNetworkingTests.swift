@@ -139,6 +139,92 @@ struct NetworkClientTests {
         }
     }
 
+    @Test
+    func sendClampsNegativeRetriesAndExecutesOnce() async {
+        let mockSession = MockURLSession { _ in
+            throw URLError(.cannotFindHost)
+        }
+        let sut = NetworkClient(session: mockSession)
+        let endpoint = StubEndpoint(baseUrl: "https://example.com", path: "/users", retries: -1)
+
+        do {
+            let _: UserDTO = try await sut.send(endpoint)
+            Issue.record("Expected NetworkError.unknown")
+        } catch let error as NetworkError {
+            if case .unknown = error {
+                #expect(true)
+            } else {
+                Issue.record("Expected unknown error, got \(error)")
+            }
+            #expect(mockSession.callCount == 1)
+        } catch {
+            Issue.record("Unexpected error type: \(error)")
+        }
+    }
+
+    @Test
+    func sendVoidSucceedsOn204WithEmptyBody() async throws {
+        let mockSession = MockURLSession { request in
+            let response = Self.httpResponse(url: request.url!, statusCode: 204)
+            return (Data(), response)
+        }
+        let sut = NetworkClient(session: mockSession)
+        let endpoint = StubEndpoint(baseUrl: "https://example.com", path: "/users/1", method: .DELETE, retries: 0)
+
+        try await sut.send(endpoint)
+
+        #expect(mockSession.callCount == 1)
+    }
+
+    @Test
+    func sendDoesNotSetContentTypeWhenNoBody() async throws {
+        let mockSession = MockURLSession { request in
+            let response = Self.httpResponse(url: request.url!, statusCode: 200)
+            return (Data("{}".utf8), response)
+        }
+        let sut = NetworkClient(session: mockSession)
+        let endpoint = StubEndpoint(baseUrl: "https://example.com", path: "/users", method: .GET, body: nil, retries: 0)
+
+        try await sut.send(endpoint)
+
+        #expect(mockSession.lastRequest?.value(forHTTPHeaderField: "Content-Type") == nil)
+    }
+
+    @Test
+    func sendPreservesCustomContentTypeWhenBodyPresent() async throws {
+        let mockSession = MockURLSession { request in
+            let response = Self.httpResponse(url: request.url!, statusCode: 200)
+            return (Data("{}".utf8), response)
+        }
+        let sut = NetworkClient(session: mockSession)
+        let endpoint = StubEndpoint(
+            baseUrl: "https://example.com",
+            path: "/users",
+            headers: ["Content-Type": "application/vnd.api+json"],
+            method: .POST,
+            body: Data("{}".utf8),
+            retries: 0
+        )
+
+        try await sut.send(endpoint)
+
+        #expect(mockSession.lastRequest?.value(forHTTPHeaderField: "Content-Type") == "application/vnd.api+json")
+    }
+
+    @Test
+    func sendSetsDefaultContentTypeWhenBodyPresentAndNoOverride() async throws {
+        let mockSession = MockURLSession { request in
+            let response = Self.httpResponse(url: request.url!, statusCode: 200)
+            return (Data("{}".utf8), response)
+        }
+        let sut = NetworkClient(session: mockSession)
+        let endpoint = StubEndpoint(baseUrl: "https://example.com", path: "/users", method: .POST, body: Data("{}".utf8), retries: 0)
+
+        try await sut.send(endpoint)
+
+        #expect(mockSession.lastRequest?.value(forHTTPHeaderField: "Content-Type") == "application/json")
+    }
+
     private static func httpResponse(url: URL, statusCode: Int) -> HTTPURLResponse {
         HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: nil)!
     }

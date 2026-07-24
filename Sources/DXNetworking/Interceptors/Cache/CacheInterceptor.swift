@@ -1,28 +1,28 @@
 import Foundation
 
-public enum CachePolicy: String {
+public enum CachePolicy: String, Sendable {
     case `public`
     case `private`
     case customController = "custom-controlled"
 }
 
 /// Protocol for intercepting URL cache operations.
-public protocol CacheInterceptorProtocol: AnyObject {
+public protocol CacheInterceptorProtocol: AnyObject, Sendable {
 
     var policy: CachePolicy { get }
     /// Intercepts cache responses before they are cached for a specific data task.
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, willCacheResponse proposedResponse: CachedURLResponse) async -> CachedURLResponse?
 }
 
-final class CacheInterceptor: NSObject, URLSessionDataDelegate, CacheInterceptorProtocol {
+public final class DefaultCacheInterceptor: NSObject, URLSessionDataDelegate, CacheInterceptorProtocol {
 
-    internal var policy: CachePolicy
+    public let policy: CachePolicy
 
     public init(policy: CachePolicy = .public) {
         self.policy = policy
     }
 
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, willCacheResponse proposedResponse: CachedURLResponse) async -> CachedURLResponse? {
+    public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, willCacheResponse proposedResponse: CachedURLResponse) async -> CachedURLResponse? {
         guard let httpResponse = proposedResponse.response as? HTTPURLResponse else {
             return proposedResponse
         }
@@ -38,7 +38,7 @@ final class CacheInterceptor: NSObject, URLSessionDataDelegate, CacheInterceptor
         return proposedResponse
     }
 
-    func urlSession(_ session: URLSession, taskIsWaitingForConnectivity task: URLSessionTask) {
+    public func urlSession(_ session: URLSession, taskIsWaitingForConnectivity task: URLSessionTask) {
         NetworkLogger.shared.log(type: .debug, message: "User has no connection established")
     }
 }

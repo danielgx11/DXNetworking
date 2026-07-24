@@ -1,11 +1,19 @@
 import Foundation
 
 public final class SessionDelegate: NSObject {
-    public weak var cacheInterceptor: CacheInterceptorProtocol? = nil
-    public weak var metricsInterceptor: MetricsInterceptorProtocol? = nil
-    public weak var taskLifecycleInterceptor: TaskLifecycleInterceptorProtocol? = nil
+    public let cacheInterceptor: CacheInterceptorProtocol?
+    public let metricsInterceptor: MetricsInterceptorProtocol?
+    public let taskLifecycleInterceptor: TaskLifecycleInterceptorProtocol?
 
-    override public init() {}
+    public init(
+        cacheInterceptor: CacheInterceptorProtocol? = nil,
+        metricsInterceptor: MetricsInterceptorProtocol? = nil,
+        taskLifecycleInterceptor: TaskLifecycleInterceptorProtocol? = nil
+    ) {
+        self.cacheInterceptor = cacheInterceptor
+        self.metricsInterceptor = metricsInterceptor
+        self.taskLifecycleInterceptor = taskLifecycleInterceptor
+    }
 }
 
 // MARK: - URLSessionDelegate

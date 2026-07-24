@@ -1,18 +1,22 @@
 import Foundation
 
-protocol NetworkClientProtocol {
+public protocol NetworkClientProtocol {
     func send<T: Decodable>(
         _ endpoint: Endpoint
     ) async throws -> T
+
+    func send(
+        _ endpoint: Endpoint
+    ) async throws
 }
 
 // TODO: - Phase 6 #28 — Evaluate Sendable conformance or convert to actor for safe concurrent access across async contexts
-final class NetworkClient: NetworkClientProtocol {
+public final class NetworkClient: NetworkClientProtocol {
 
     private let session: URLSessionProtocol
-    let decoder: JSONDecoder
+    private let decoder: JSONDecoder
 
-    init(
+    public init(
         session: URLSessionProtocol,
         decoder: JSONDecoder = JSONDecoder()
     ) {
@@ -20,9 +24,9 @@ final class NetworkClient: NetworkClientProtocol {
         self.decoder = decoder
     }
 
-    convenience init(
+    public convenience init(
         options: NetworkClientOptions = NetworkClientOptions(),
-        sessionDelegate: SessionDelegate = SessionDelegate(),
+        sessionDelegate: SessionDelegate? = nil,
         delegateQueue: OperationQueue? = nil,
         decoder: JSONDecoder = JSONDecoder()
     ) {
@@ -36,31 +40,54 @@ final class NetworkClient: NetworkClientProtocol {
         configuration.waitsForConnectivity = options.waitsForConnectivity
         configuration.timeoutIntervalForRequest = options.timeoutIntervalForRequest
 
-        let cacheInterceptor = CacheInterceptor()
-        let taskLifecycleInterceptor = TaskLifecycleInterceptor()
-        sessionDelegate.cacheInterceptor = cacheInterceptor
-        sessionDelegate.taskLifecycleInterceptor = taskLifecycleInterceptor
+        let cacheInterceptor = DefaultCacheInterceptor()
+        let metricsInterceptor = DefaultMetricsInterceptor()
+        let taskLifecycleInterceptor = DefaultTaskLifecycleInterceptor()
+        let resolvedDelegate = sessionDelegate ?? SessionDelegate(
+            cacheInterceptor: cacheInterceptor,
+            metricsInterceptor: metricsInterceptor,
+            taskLifecycleInterceptor: taskLifecycleInterceptor
+        )
 
         let urlSession = URLSession(
             configuration: configuration,
-            delegate: sessionDelegate,
+            delegate: resolvedDelegate,
             delegateQueue: delegateQueue
         )
 
         self.init(session: urlSession, decoder: decoder)
     }
 
-    func send<T: Decodable>(
+    public func send<T: Decodable>(
         _ endpoint: Endpoint
+    ) async throws -> T {
+        try await withRetries(endpoint) {
+            try await self.fetch(from: endpoint)
+        }
+    }
+
+    public func send(
+        _ endpoint: Endpoint
+    ) async throws {
+        try await withRetries(endpoint) {
+            _ = try await self.performRequest(endpoint)
+        }
+    }
+
+    // TODO: - Phase 5 #20 — Replace fixed base delay with configurable backoff strategy (currently exponential + jitter, single source of truth here)
+    private func withRetries<T>(
+        _ endpoint: Endpoint,
+        operation: () async throws -> T
     ) async throws -> T {
         let sleepTimeMultiplier: Double = 1_000_000_000
         let base = 0.25
         let maxInterval = 60.0
         var lastError: Error?
+        let retryCount = max(0, endpoint.retries)
 
-        for attempt in 0...endpoint.retries {
+        for attempt in 0...retryCount {
             do {
-                return try await fetch(from: endpoint)
+                return try await operation()
             } catch let error as NetworkError {
                 switch error {
                 case .invalidResponse, .noData, .invalidBaseUrl, .decodingError, .cancelled:
@@ -72,11 +99,10 @@ final class NetworkClient: NetworkClientProtocol {
                 lastError = error
             }
 
-            guard attempt < endpoint.retries else {
+            guard attempt < retryCount else {
                 break
             }
 
-            // TODO: - Phase 5 #20 — Replace fixed 1s delay with exponential backoff + jitter: min(maxDelay, baseDelay * 2^attempt) + random
             let sleep = base * Double(pow(Double(2), Double(attempt)))
             let seconds = Double.random(in: 0...min(maxInterval, sleep))
             try await Task.sleep(nanoseconds: UInt64(seconds * sleepTimeMultiplier))
@@ -89,6 +115,10 @@ final class NetworkClient: NetworkClientProtocol {
         from endpoint: any Endpoint
     ) async throws -> T where T : Decodable {
         let (data, _) = try await performRequest(endpoint)
+
+        guard !data.isEmpty else {
+            throw NetworkError.noData
+        }
 
         return try decode(from: data)
     }
@@ -112,9 +142,11 @@ final class NetworkClient: NetworkClientProtocol {
 
         urlRequest.httpMethod = endpoint.method.stringValue
         urlRequest.httpBody = endpoint.body
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         endpoint.headers?.forEach {
             urlRequest.setValue($1, forHTTPHeaderField: $0)
+        }
+        if endpoint.body != nil, urlRequest.value(forHTTPHeaderField: "Content-Type") == nil {
+            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
 
         // TODO: - Phase 5 #23 — Log request URL + method via NetworkLogger.shared.log before send
@@ -128,10 +160,6 @@ final class NetworkClient: NetworkClientProtocol {
 
             guard 200..<300 ~= httpResponse.statusCode else {
                 throw NetworkError.serverError(statusCode: httpResponse.statusCode)
-            }
-
-            guard !data.isEmpty else {
-                throw NetworkError.noData
             }
 
             return (data, httpResponse)
@@ -166,13 +194,13 @@ final class NetworkClient: NetworkClientProtocol {
 }
 
 extension NetworkClient: RequestInterceptor {
-    func adapt(request: URLRequest) throws -> URLRequest {
+    public func adapt(request: URLRequest) throws -> URLRequest {
         debugPrint(#function)
 
         return request
     }
     
-    func retry(request: URLRequest, dueTo error: any Error, attemptCount: Int) async -> RetryResult {
+    public func retry(request: URLRequest, dueTo error: any Error, attemptCount: Int) async -> RetryResult {
         debugPrint(#function)
 //        let sleep = base * Double(pow(Double(2), Double(attempt)))
 //        let seconds = Double.random(in: 0...min(maxInterval, sleep))

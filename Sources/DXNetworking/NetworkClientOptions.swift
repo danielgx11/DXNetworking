@@ -1,16 +1,16 @@
 import Foundation
 
-struct NetworkClientOptions {
-    var memoryCapacity: Int
-    var diskCapacity: Int
-    var requestCachePolicy: URLRequest.CachePolicy
-    var waitsForConnectivity: Bool
-    var timeoutIntervalForRequest: TimeInterval
+public struct NetworkClientOptions {
+    public var memoryCapacity: Int
+    public var diskCapacity: Int
+    public var requestCachePolicy: URLRequest.CachePolicy
+    public var waitsForConnectivity: Bool
+    public var timeoutIntervalForRequest: TimeInterval
 
-    init(
+    public init(
         memoryCapacity: Int = 1024 * 50,
         diskCapacity: Int = 1024 * 200,
-        requestCachePolicy: URLRequest.CachePolicy = .returnCacheDataElseLoad,
+        requestCachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy,
         waitsForConnectivity: Bool = true,
         timeoutIntervalForRequest: TimeInterval = 15
     ) {

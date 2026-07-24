@@ -1,6 +1,6 @@
 import Foundation
 
-enum RetryResult: Sendable {
+public enum RetryResult: Sendable {
     /// Retry immediately
     case retry
     /// The interceptor calculated the backoff + jitter
